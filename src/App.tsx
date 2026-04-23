@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AlertCircleIcon, CheckCircle2Icon, XIcon } from "lucide-react";
 import { Dropzone } from "@/components/Dropzone";
@@ -171,18 +170,19 @@ export function App() {
                   Change
                 </Button>
               </div>
-              <TilePreview file={file} dims={dims} rows={rows} cols={cols} />
-              <Separator />
-              <GridControls
-                rows={rows}
-                cols={cols}
-                dims={dims}
-                onRowsChange={setRows}
-                onColsChange={setCols}
-                canSplit={canSplit}
-                onSplit={onSplit}
-                busy={status.kind === "busy"}
-              />
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <TilePreview file={file} dims={dims} rows={rows} cols={cols} />
+                <GridControls
+                  rows={rows}
+                  cols={cols}
+                  dims={dims}
+                  onRowsChange={setRows}
+                  onColsChange={setCols}
+                  canSplit={canSplit}
+                  onSplit={onSplit}
+                  busy={status.kind === "busy"}
+                />
+              </div>
             </div>
           )}
         </CardContent>
