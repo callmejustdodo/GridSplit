@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { ImageIcon } from "lucide-react";
 import { planTiles, SplitError } from "@/split";
@@ -9,11 +9,23 @@ type Props = {
   dims: { width: number; height: number } | null;
   rows: number;
   cols: number;
+  onCommit?: (rows: number, cols: number) => void;
 };
 
-export function TilePreview({ file, dims, rows, cols }: Props) {
+// Too close to the top or left edge and `round(1/rel)` explodes toward 50.
+// Treat the first 2.5% of each dimension as the "no hover grid" gutter.
+const EDGE_GUTTER = 0.025;
+
+function deriveFromMouse(relX: number, relY: number): { rows: number; cols: number } | null {
+  if (relX <= EDGE_GUTTER || relY <= EDGE_GUTTER || relX >= 1 || relY >= 1) return null;
+  const cols = Math.max(1, Math.min(50, Math.round(1 / relX)));
+  const rows = Math.max(1, Math.min(50, Math.round(1 / relY)));
+  return { rows, cols };
+}
+
+export function TilePreview({ file, dims, rows, cols, onCommit }: Props) {
   const [objectURL, setObjectURL] = useState<string | null>(null);
-  const [hoverTile, setHoverTile] = useState<{ r: number; c: number } | null>(null);
+  const [hoverGrid, setHoverGrid] = useState<{ rows: number; cols: number } | null>(null);
 
   useEffect(() => {
     if (!file) {
@@ -25,25 +37,55 @@ export function TilePreview({ file, dims, rows, cols }: Props) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  const effectiveRows = hoverGrid?.rows ?? rows;
+  const effectiveCols = hoverGrid?.cols ?? cols;
+
   const layout = useMemo(() => {
     if (!dims) return null;
     try {
-      const { tileW, tileH } = planTiles(dims.width, dims.height, { rows, cols });
-      const gridW = cols * tileW;
-      const gridH = rows * tileH;
+      const { tileW, tileH } = planTiles(dims.width, dims.height, {
+        rows: effectiveRows,
+        cols: effectiveCols,
+      });
+      const gridW = effectiveCols * tileW;
+      const gridH = effectiveRows * tileH;
       return {
         tileW,
         tileH,
         gridWPct: (gridW / dims.width) * 100,
         gridHPct: (gridH / dims.height) * 100,
-        cropRightPx: dims.width - gridW,
-        cropBottomPx: dims.height - gridH,
       };
     } catch (err) {
       if (err instanceof SplitError) return null;
       throw err;
     }
-  }, [dims, rows, cols]);
+  }, [dims, effectiveRows, effectiveCols]);
+
+  const onMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const relX = (e.clientX - rect.left) / rect.width;
+      const relY = (e.clientY - rect.top) / rect.height;
+      const next = deriveFromMouse(relX, relY);
+      if (!next) {
+        if (hoverGrid !== null) setHoverGrid(null);
+        return;
+      }
+      if (hoverGrid?.rows !== next.rows || hoverGrid?.cols !== next.cols) {
+        setHoverGrid(next);
+      }
+    },
+    [hoverGrid],
+  );
+
+  const onMouseLeave = useCallback(() => setHoverGrid(null), []);
+
+  const onClick = useCallback(() => {
+    if (hoverGrid && onCommit) {
+      onCommit(hoverGrid.rows, hoverGrid.cols);
+    }
+  }, [hoverGrid, onCommit]);
 
   if (!file || !dims || !objectURL) {
     return (
@@ -59,10 +101,22 @@ export function TilePreview({ file, dims, rows, cols }: Props) {
     );
   }
 
+  const interactive = Boolean(onCommit);
+  const hoverChangesCommitted =
+    hoverGrid && (hoverGrid.rows !== rows || hoverGrid.cols !== cols);
+
   return (
     <div className="flex flex-col gap-2">
       <div className="bg-muted/40 flex items-center justify-center p-2">
-        <div className="relative inline-block max-w-full">
+        <div
+          className={cn(
+            "relative inline-block max-w-full",
+            interactive && "cursor-crosshair",
+          )}
+          onMouseMove={interactive ? onMouseMove : undefined}
+          onMouseLeave={interactive ? onMouseLeave : undefined}
+          onClick={interactive ? onClick : undefined}
+        >
           <img
             src={objectURL}
             alt="source"
@@ -70,36 +124,27 @@ export function TilePreview({ file, dims, rows, cols }: Props) {
             draggable={false}
           />
           {layout && (
-            <>
-              {/* Grid cells — sized to the usable region; rest is cropped */}
-              <div
-                className="absolute top-0 left-0 grid"
-                style={{
-                  width: `${layout.gridWPct}%`,
-                  height: `${layout.gridHPct}%`,
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                  gridTemplateRows: `repeat(${rows}, 1fr)`,
-                }}
-              >
-                {Array.from({ length: rows * cols }).map((_, i) => {
-                  const r = Math.floor(i / cols);
-                  const c = i % cols;
-                  const active = hoverTile?.r === r && hoverTile?.c === c;
-                  return (
-                    <div
-                      key={i}
-                      onMouseEnter={() => setHoverTile({ r, c })}
-                      onMouseLeave={() => setHoverTile(null)}
-                      className={cn(
-                        "border-primary/70 border transition-colors",
-                        active ? "bg-primary/25" : "hover:bg-primary/10",
-                      )}
-                    />
-                  );
-                })}
-              </div>
-
-            </>
+            <div
+              className="pointer-events-none absolute top-0 left-0 grid"
+              style={{
+                width: `${layout.gridWPct}%`,
+                height: `${layout.gridHPct}%`,
+                gridTemplateColumns: `repeat(${effectiveCols}, 1fr)`,
+                gridTemplateRows: `repeat(${effectiveRows}, 1fr)`,
+              }}
+            >
+              {Array.from({ length: effectiveRows * effectiveCols }).map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "border transition-colors",
+                    hoverGrid
+                      ? "border-primary bg-primary/5"
+                      : "border-primary/70",
+                  )}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -107,12 +152,15 @@ export function TilePreview({ file, dims, rows, cols }: Props) {
       {layout && (
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
           <span className="font-mono">
-            tile: {layout.tileW} × {layout.tileH}
+            {effectiveRows} × {effectiveCols} · tile {layout.tileW} × {layout.tileH}
           </span>
-          {hoverTile && (
-            <span className="font-mono">
-              hover: row {hoverTile.r + 1}, col {hoverTile.c + 1}
+          {interactive && hoverChangesCommitted && (
+            <span className="text-primary font-mono">
+              click to set {hoverGrid.rows} × {hoverGrid.cols}
             </span>
+          )}
+          {interactive && !hoverGrid && (
+            <span className="font-mono">hover to preview · click to set</span>
           )}
         </div>
       )}

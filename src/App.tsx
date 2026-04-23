@@ -171,7 +171,16 @@ export function App() {
                 </Button>
               </div>
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <TilePreview file={file} dims={dims} rows={rows} cols={cols} />
+                <TilePreview
+                  file={file}
+                  dims={dims}
+                  rows={rows}
+                  cols={cols}
+                  onCommit={(r, c) => {
+                    setRows(r);
+                    setCols(c);
+                  }}
+                />
                 <GridControls
                   rows={rows}
                   cols={cols}
