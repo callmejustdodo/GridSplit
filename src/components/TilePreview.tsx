@@ -111,7 +111,7 @@ export function TilePreview({ file, dims, rows, cols, onCommit }: Props) {
         <div
           className={cn(
             "relative inline-block max-w-full",
-            interactive && "cursor-crosshair",
+            interactive && "cursor-pointer",
           )}
           onMouseMove={interactive ? onMouseMove : undefined}
           onMouseLeave={interactive ? onMouseLeave : undefined}
