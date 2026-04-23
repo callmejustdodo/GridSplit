@@ -12,16 +12,12 @@ type Props = {
   onCommit?: (rows: number, cols: number) => void;
 };
 
-// At the center (dist=0.5 to either edge) we want 2 slices; approaching
-// any edge makes slices finer. A 2.5% gutter off each edge suppresses the
-// 1/d explosion that would otherwise clamp to 50 right at the border.
-const EDGE_GUTTER = 0.025;
-
+// Center = 2×2, each axis gets finer toward its nearest edge, clamp to 50.
+// Per-axis and independent — moving only X changes cols, moving only Y changes rows.
 function deriveFromMouse(relX: number, relY: number): { rows: number; cols: number } | null {
   if (relX <= 0 || relY <= 0 || relX >= 1 || relY >= 1) return null;
-  const dx = Math.min(relX, 1 - relX); // distance to nearest vertical edge (0..0.5)
-  const dy = Math.min(relY, 1 - relY); // distance to nearest horizontal edge
-  if (dx <= EDGE_GUTTER || dy <= EDGE_GUTTER) return null;
+  const dx = Math.min(relX, 1 - relX);
+  const dy = Math.min(relY, 1 - relY);
   const cols = Math.max(2, Math.min(50, Math.round(1 / dx)));
   const rows = Math.max(2, Math.min(50, Math.round(1 / dy)));
   return { rows, cols };
@@ -65,23 +61,13 @@ export function TilePreview({ file, dims, rows, cols, onCommit }: Props) {
     }
   }, [dims, effectiveRows, effectiveCols]);
 
-  const onMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const relX = (e.clientX - rect.left) / rect.width;
-      const relY = (e.clientY - rect.top) / rect.height;
-      const next = deriveFromMouse(relX, relY);
-      if (!next) {
-        if (hoverGrid !== null) setHoverGrid(null);
-        return;
-      }
-      if (hoverGrid?.rows !== next.rows || hoverGrid?.cols !== next.cols) {
-        setHoverGrid(next);
-      }
-    },
-    [hoverGrid],
-  );
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    setHoverGrid(
+      deriveFromMouse((e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height),
+    );
+  }, []);
 
   const onMouseLeave = useCallback(() => setHoverGrid(null), []);
 
