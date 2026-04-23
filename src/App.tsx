@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -233,6 +234,7 @@ export function App() {
         </p>
         <p>No server, client-only. Your image never leaves this tab.</p>
       </footer>
+      <Analytics />
     </main>
   );
 }
