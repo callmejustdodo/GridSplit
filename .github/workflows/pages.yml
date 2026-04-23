@@ -1,0 +1,41 @@
+name: CI + Pages
+on: { push: { branches: [main] } }
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e
+      - name: Single-file + no-sourcemap guard
+        run: |
+          test -f dist/index.html
+          if ls dist/assets/*.js dist/assets/*.css dist/assets/*.map 2>/dev/null | grep -q .; then
+            echo "expected inlined single-file build but found separate assets"; exit 1
+          fi
+          if grep -r "sourceMappingURL" dist/ ; then
+            echo "source maps leaked"; exit 1
+          fi
+      - name: Bundle-size hard-fail
+        run: |
+          SIZE=$(wc -c < dist/index.html)
+          echo "dist/index.html = $SIZE bytes"
+          # Raised from 200 KB after the React + shadcn migration.
+          # 700 KB leaves ~50% headroom over the current ~465 KB single-file artifact (~212 KB gzipped).
+          [ "$SIZE" -le 716800 ] || { echo "bundle too large ($SIZE > 700 KB)"; exit 1; }
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: ${{ steps.deployment.outputs.page_url }} }
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

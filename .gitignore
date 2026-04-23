@@ -1,6 +1,17 @@
-.omc/
-.DS_Store
 node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+.DS_Store
 .env
 .env.local
 .env*.local
+.vercel
+
+# OMC runtime state (session-local; specs/plans/drafts remain tracked)
+.omc/state/
+.omc/sessions/
+.omc/project-memory.json
+.omc/notepad.md
+.omc/logs/
