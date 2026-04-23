@@ -12,14 +12,18 @@ type Props = {
   onCommit?: (rows: number, cols: number) => void;
 };
 
-// Too close to the top or left edge and `round(1/rel)` explodes toward 50.
-// Treat the first 2.5% of each dimension as the "no hover grid" gutter.
+// At the center (dist=0.5 to either edge) we want 2 slices; approaching
+// any edge makes slices finer. A 2.5% gutter off each edge suppresses the
+// 1/d explosion that would otherwise clamp to 50 right at the border.
 const EDGE_GUTTER = 0.025;
 
 function deriveFromMouse(relX: number, relY: number): { rows: number; cols: number } | null {
-  if (relX <= EDGE_GUTTER || relY <= EDGE_GUTTER || relX >= 1 || relY >= 1) return null;
-  const cols = Math.max(1, Math.min(50, Math.round(1 / relX)));
-  const rows = Math.max(1, Math.min(50, Math.round(1 / relY)));
+  if (relX <= 0 || relY <= 0 || relX >= 1 || relY >= 1) return null;
+  const dx = Math.min(relX, 1 - relX); // distance to nearest vertical edge (0..0.5)
+  const dy = Math.min(relY, 1 - relY); // distance to nearest horizontal edge
+  if (dx <= EDGE_GUTTER || dy <= EDGE_GUTTER) return null;
+  const cols = Math.max(2, Math.min(50, Math.round(1 / dx)));
+  const rows = Math.max(2, Math.min(50, Math.round(1 / dy)));
   return { rows, cols };
 }
 
